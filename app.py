@@ -702,6 +702,8 @@ def partner_login():
 # =========================
 # 📊 Partner Stats API
 # =========================
+ # ✅ add this import at top if missing
+
 @app.route("/partner/stats")
 def partner_stats():
     try:
@@ -710,7 +712,7 @@ def partner_stats():
 
         query = {
             "status": "printed",
-            "printed_at": {"$ne": None}   # ✅ FIX: avoid null crash
+            "printed_at": {"$ne": None}
         }
 
         # ================= DATE FILTER =================
@@ -732,8 +734,8 @@ def partner_stats():
             start = now - timedelta(days=30)
             query["printed_at"]["$gte"] = start
 
-        # ================= FETCH =================
-        cursor = prints.find(query, {
+        # ✅ IMPORTANT FIX HERE
+        cursor = jobs_collection.find(query, {
             "pages": 1,
             "print_type": 1,
             "cost": 1
@@ -751,11 +753,13 @@ def partner_stats():
             print_type = doc.get("print_type", "single")
             cost = doc.get("cost", 0)
 
+            # 💰 Exact earnings
             total_earnings += cost
 
+            # 📄 Sheets logic (IMPORTANT FIX: "double" not "duplex")
             if print_type == "single":
                 total_sheets += pages
-            elif print_type == "duplex":
+            elif print_type == "double":
                 total_sheets += (pages + 1) // 2
 
         return jsonify({
@@ -765,9 +769,8 @@ def partner_stats():
         })
 
     except Exception as e:
-        print("ERROR in /partner/stats:", e)  # 👈 check Render logs
+        print("ERROR in /partner/stats:", e)
         return jsonify({"error": str(e)}), 500
-
 
 # -------------------------
 # RUN SERVER
