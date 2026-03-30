@@ -674,14 +674,6 @@ def revenue_graph():
 # partner
 
 
-from flask import Flask, request, jsonify
-from datetime import datetime, timedelta
-
-app = Flask(__name__)
-
-# ✅ Partner credentials
-PARTNER_ID = "shop1"
-PARTNER_PASSWORD = "1234"
 
 # 👉 assume this exists
 # prints = db.prints
@@ -754,4 +746,4 @@ def partner_stats():
 # RUN SERVER
 # -------------------------
 if __name__ == "__main__":
-     serve(app, host="0.0.0.0", port=5000) 
+    app.run(host="0.0.0.0", port=5000)
