@@ -704,7 +704,7 @@ def partner_login():
 # =========================
  # ✅ add this import at top if missing
 
-from datetime import datetime, timezone, timedelta
+
 
 @app.route("/partner/stats")
 def partner_stats():
@@ -715,40 +715,45 @@ def partner_stats():
 
         now = datetime.utcnow().replace(tzinfo=timezone.utc)
 
-        # ================= BASE QUERY =================
         query = {
             "status": "printed"
         }
 
-        # ================= CUSTOM DATE =================
+        # ================= CUSTOM DATE (FIXED) =================
         if from_date and to_date:
             start = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)
-            end = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc) + timedelta(days=1)
+            end = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc)
+
+            # 🔥 IMPORTANT: include full day
+            end = end + timedelta(days=1)
+
+            query["printed_at"] = {
+                "$gte": start,
+                "$lt": end
+            }
 
         else:
-            # fallback to predefined filters
+            # ================= PRESET FILTER =================
             if filter_type == "today":
                 start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+                query["printed_at"] = {"$gte": start}
 
             elif filter_type == "yesterday":
                 start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc) - timedelta(days=1)
                 end = start + timedelta(days=1)
 
+                query["printed_at"] = {
+                    "$gte": start,
+                    "$lt": end
+                }
+
             elif filter_type == "7days":
                 start = now - timedelta(days=7)
+                query["printed_at"] = {"$gte": start}
 
             elif filter_type == "30days":
                 start = now - timedelta(days=30)
-
-            else:
-                start = None
-
-        # apply filter
-        if start:
-            query["printed_at"] = {"$gte": start}
-
-        if filter_type == "yesterday" and "end" in locals():
-            query["printed_at"]["$lt"] = end
+                query["printed_at"] = {"$gte": start}
 
         # ================= FETCH =================
         cursor = jobs_collection.find(query)
@@ -776,10 +781,8 @@ def partner_stats():
         })
 
     except Exception as e:
-        print("ERROR in /partner/stats:", e)
-        return jsonify({"error": str(e)}), 500
-    
-    
+        print("ERROR:", e)
+        return jsonify({"error": str(e)}), 500    
     
         
 # -------------------------
