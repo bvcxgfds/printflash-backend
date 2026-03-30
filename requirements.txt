@@ -1,0 +1,11 @@
+flask
+flask-cors
+pymongo
+dnspython
+cloudinary
+razorpay
+PyPDF2
+requests
+python-dotenv
+google-auth
+gunicorn
