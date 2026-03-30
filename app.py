@@ -98,6 +98,13 @@ jobs_collection = db["jobs"]
 
 # print(db.list_collection_names())
 
+#check api live or not
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "running"}), 200
+
+
+
 
 # -------------------------
 # CREATE PRINT JOB
