@@ -703,26 +703,26 @@ def partner_login():
 # 📊 Partner Stats API
 # =========================
  # ✅ add this import at top if missing
-
 @app.route("/partner/stats")
 def partner_stats():
     try:
         filter_type = request.args.get("filter")
-        now = datetime.utcnow()
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
 
         query = {
             "status": "printed",
             "printed_at": {"$ne": None}
         }
 
-        # ================= DATE FILTER =================
+        # ================= DATE FILTER (FIXED) =================
         if filter_type == "today":
-            start = datetime(now.year, now.month, now.day)
+            start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
             query["printed_at"]["$gte"] = start
 
         elif filter_type == "yesterday":
-            start = datetime(now.year, now.month, now.day) - timedelta(days=1)
+            start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc) - timedelta(days=1)
             end = start + timedelta(days=1)
+
             query["printed_at"]["$gte"] = start
             query["printed_at"]["$lt"] = end
 
@@ -734,7 +734,7 @@ def partner_stats():
             start = now - timedelta(days=30)
             query["printed_at"]["$gte"] = start
 
-        # ✅ IMPORTANT FIX HERE
+        # ================= FETCH =================
         cursor = jobs_collection.find(query, {
             "pages": 1,
             "print_type": 1,
@@ -753,10 +753,8 @@ def partner_stats():
             print_type = doc.get("print_type", "single")
             cost = doc.get("cost", 0)
 
-            # 💰 Exact earnings
             total_earnings += cost
 
-            # 📄 Sheets logic (IMPORTANT FIX: "double" not "duplex")
             if print_type == "single":
                 total_sheets += pages
             elif print_type == "double":
@@ -771,7 +769,6 @@ def partner_stats():
     except Exception as e:
         print("ERROR in /partner/stats:", e)
         return jsonify({"error": str(e)}), 500
-
 # -------------------------
 # RUN SERVER
 # -------------------------
