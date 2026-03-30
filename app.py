@@ -702,13 +702,19 @@ def partner_login():
 # =========================
 # 📊 Partner Stats API
 # =========================
+from flask import request, jsonify
+from datetime import datetime, timedelta
+
 @app.route("/partner/stats")
 def partner_stats():
     filter_type = request.args.get("filter")
     now = datetime.utcnow()
 
-    query = {"status": "printed"}
+    query = {
+        "status": "printed"
+    }
 
+    # ================= DATE FILTER =================
     if filter_type == "today":
         start = datetime(now.year, now.month, now.day)
         query["printed_at"] = {"$gte": start}
@@ -726,18 +732,40 @@ def partner_stats():
         start = now - timedelta(days=30)
         query["printed_at"] = {"$gte": start}
 
-    # 👉 count only printed jobs
-    count = prints.count_documents(query)
-
-    # 👉 SAME logic as admin (change if needed)
-    commission_per_print = 2
-    earnings = count * commission_per_print
-
-    return jsonify({
-        "prints": count,
-        "earnings": earnings
+    # ================= FETCH ONLY REQUIRED FIELDS =================
+    cursor = prints.find(query, {
+        "pages": 1,
+        "print_type": 1,
+        "cost": 1
     })
 
+    total_prints = 0
+    total_earnings = 0
+    total_sheets = 0
+
+    # ================= CALCULATIONS =================
+    for doc in cursor:
+        total_prints += 1
+
+        pages = doc.get("pages", 0)
+        print_type = doc.get("print_type", "single")
+        cost = doc.get("cost", 0)
+
+        # 💰 Exact earnings
+        total_earnings += cost
+
+        # 📄 Exact sheets
+        if print_type == "single":
+            total_sheets += pages
+        elif print_type == "duplex":
+            total_sheets += (pages + 1) // 2  # ceil division
+
+    # ================= RESPONSE =================
+    return jsonify({
+        "prints": total_prints,
+        "earnings": total_earnings,
+        "sheets": total_sheets
+    })
 
 
 
