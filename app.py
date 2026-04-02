@@ -126,9 +126,9 @@ def create_print_job():
         file_url = result["secure_url"]
 
         # Cost
+        #ppp
         cost_per_page = 1.8 if print_type == "double" else 1.2
-        total_cost = ((pages + 1)//2)*cost_per_page if print_type=="double" else pages*cost_per_page
-
+        total_cost = round(((pages + 1)//2)*cost_per_page if print_type=="double" else pages*cost_per_page, 2)
         # ✅ FIXED PRINT ID
         def generate_print_id():
             while True:
@@ -331,7 +331,7 @@ def calculate():
                 "message": f"Max {MAX_PAGES} pages allowed. Your file has {num_pages} pages."
             }), 400
 
-        total_cost = num_pages * COST_PER_PAGE
+        total_cost = round(num_pages * COST_PER_PAGE, 2)
 
         return jsonify({
             "success": True,
@@ -365,12 +365,12 @@ def get_cost():
         if print_type == "double":
             
             if pages % 2 == 0:
-                total_cost = (pages // 2) * cost_per_page
+                total_cost = round((pages // 2) * cost_per_page, 2)
             else:
-                total_cost = ((pages // 2) + 1) * cost_per_page
+                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
         else:
             
-            total_cost = pages * cost_per_page
+            total_cost = round(pages * cost_per_page, 2)
 
         return jsonify({
             "success": True,
@@ -476,11 +476,11 @@ def upload_file():
 
         if print_type == "double":
             if pages % 2 == 0:
-                total_cost = (pages // 2) * cost_per_page
+                total_cost = round((pages // 2) * cost_per_page, 2)
             else:
-                total_cost = ((pages // 2) + 1) * cost_per_page
+                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
         else:
-            total_cost = pages * cost_per_page
+            total_cost = round(pages * cost_per_page, 2)
 
         # 5️⃣ Save job in MongoDB
         job_id = str(random.randint(100000, 999999))
