@@ -99,6 +99,14 @@ jobs_collection = db["jobs"]
 
 # print(db.list_collection_names())
 
+# for api check
+@app.route("/health", methods=["GET"])
+def health():
+    return {"status": "running"}, 200
+
+
+
+
 
 # -------------------------
 # CREATE PRINT JOB
