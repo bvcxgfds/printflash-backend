@@ -53,7 +53,8 @@ razorpay_client = razorpay.Client(auth=(
 # -------------------------
 #page price
 # -------------------------
-COST_PER_PAGE = 1  # ₹1 per page
+#ppp
+COST_PER_PAGE = 1.2  
 MAX_PAGES = 50
 
 #app = Flask(__name__)
@@ -98,13 +99,6 @@ jobs_collection = db["jobs"]
 
 # print(db.list_collection_names())
 
-#check api live or not
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"status": "running"}), 200
-
-
-
 
 # -------------------------
 # CREATE PRINT JOB
@@ -132,7 +126,7 @@ def create_print_job():
         file_url = result["secure_url"]
 
         # Cost
-        cost_per_page = 1.5 if print_type == "double" else 1
+        cost_per_page = 1.8 if print_type == "double" else 1.2
         total_cost = ((pages + 1)//2)*cost_per_page if print_type=="double" else pages*cost_per_page
 
         # ✅ FIXED PRINT ID
@@ -366,7 +360,7 @@ def get_cost():
             return jsonify({"success": False, "message": "Pages missing"}), 400
 
       
-        cost_per_page = 1.5 if print_type == "double" else 1
+        cost_per_page = 1.8 if print_type == "double" else 1.2
 
         if print_type == "double":
             
@@ -477,7 +471,8 @@ def upload_file():
         file_url = result["secure_url"]
 
         # 4️⃣ Calculate cost (your exact logic)
-        cost_per_page = 1.5 if print_type == "double" else 1
+        #ppp
+        cost_per_page = 1.8 if print_type == "double" else 1.2
 
         if print_type == "double":
             if pages % 2 == 0:
@@ -713,6 +708,8 @@ def partner_login():
 
 
 
+
+
 @app.route("/partner/stats")
 def partner_stats():
     try:
@@ -789,7 +786,29 @@ def partner_stats():
 
     except Exception as e:
         print("ERROR:", e)
-        return jsonify({"error": str(e)}), 500    
+        return jsonify({"error": str(e)}), 500
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
         
 # -------------------------
