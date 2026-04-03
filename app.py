@@ -51,7 +51,7 @@ razorpay_client = razorpay.Client(auth=(
 ))
 
 # -------------------------
-#page price
+#price per page = ppp
 # -------------------------
 #ppp
 COST_PER_PAGE = 1.2  
@@ -210,24 +210,24 @@ def history(email):
 # -------------------------
 # VERIFY AT PRINTER
 # -------------------------
+from pymongo import ReturnDocument
+
 @app.route("/verify", methods=["POST"])
 def verify():
     try:
         data = request.json
 
-        # ✅ Safe extraction
         print_id = data.get("printId")
         otp = str(data.get("otp"))
 
-        # ❌ Missing data check
         if not print_id or not otp:
             return jsonify({
                 "verified": False,
                 "message": "Missing printId or OTP"
             }), 400
 
-        # 🔥 Atomic update (secure + prevents reuse)
-        result = jobs_collection.update_one(
+        # 🔥 atomic + get document
+        doc = jobs_collection.find_one_and_update(
             {
                 "_id": print_id,
                 "otp": otp,
@@ -239,14 +239,19 @@ def verify():
                     "otp": None,
                     "printed_at": datetime.now(timezone.utc)
                 }
-            }
+            },
+            return_document=ReturnDocument.AFTER
         )
 
         # ✅ Success
-        if result.modified_count == 1:
-            return jsonify({"verified": True})
+        if doc:
+            return jsonify({
+                "verified": True,
+                "print_type": doc.get("print_type", "single"),
+                "file_url": doc.get("file_url")
+            })
 
-        # ❌ Failed (wrong OTP / already printed)
+        # ❌ Failed
         return jsonify({
             "verified": False,
             "message": "Invalid or already used"
@@ -257,7 +262,8 @@ def verify():
         return jsonify({
             "verified": False,
             "message": "Server error"
-        }), 500    
+        }), 500
+        
 # -------------------------
 # DOWNLOAD AFTER VERIFY
 # -------------------------
@@ -367,7 +373,7 @@ def get_cost():
         if pages == 0:
             return jsonify({"success": False, "message": "Pages missing"}), 400
 
-      
+        #ppp
         cost_per_page = 1.8 if print_type == "double" else 1.2
 
         if print_type == "double":
