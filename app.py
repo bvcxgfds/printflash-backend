@@ -440,23 +440,37 @@ def create_order():
 #verify rozerpay
 @app.route("/verify-payment", methods=["POST"])
 def verify_payment():
-    data = request.json
+    try:
+        data = request.json
 
-    order_id = data["razorpay_order_id"]
-    payment_id = data["razorpay_payment_id"]
-    signature = data["razorpay_signature"]
+        if not data:
+            return jsonify({"status": "failed", "message": "No data received"}), 400
 
-    generated_signature = hmac.new(
-        bytes(os.getenv("RAZORPAY_KEY_SECRET"), 'utf-8'),
-        bytes(order_id + "|" + payment_id, 'utf-8'),
-        hashlib.sha256
-    ).hexdigest()
+        order_id = data.get("razorpay_order_id")
+        payment_id = data.get("razorpay_payment_id")
+        signature = data.get("razorpay_signature")
 
-    if generated_signature == signature:
-        return jsonify({"status": "success"})
-    else:
-        return jsonify({"status": "failed"})
+        if not order_id or not payment_id or not signature:
+            return jsonify({"status": "failed", "message": "Missing payment fields"}), 400
 
+        key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+        if not key_secret:
+            return jsonify({"status": "failed", "message": "Server config error"}), 500
+
+        generated_signature = hmac.new(
+            bytes(key_secret, 'utf-8'),
+            bytes(order_id + "|" + payment_id, 'utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+
+        if generated_signature == signature:
+            return jsonify({"status": "success"})
+        else:
+            return jsonify({"status": "failed", "message": "Signature mismatch"})
+
+    except Exception as e:
+        print("VERIFY PAYMENT ERROR:", e)
+        return jsonify({"status": "failed", "message": str(e)}), 500
 
 
 
