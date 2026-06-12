@@ -54,7 +54,7 @@ razorpay_client = razorpay.Client(auth=(
 #price per page = ppp
 # -------------------------
 #ppp
-COST_PER_PAGE = 1 
+COST_PER_PAGE = 0.8  
 MAX_PAGES = 50
 
 #app = Flask(__name__)
@@ -135,8 +135,8 @@ def create_print_job():
 
         # Cost
         #ppp
-        cost_per_page = 1.5 if print_type == "double" else 1
-        total_cost = round(pages * cost_per_page, 2)
+        cost_per_page = 1.4 if print_type == "double" else 0.8
+        total_cost = round(((pages + 1)//2)*cost_per_page if print_type=="double" else pages*cost_per_page, 2)
         # ✅ FIXED PRINT ID
         def generate_print_id():
             while True:
@@ -374,9 +374,17 @@ def get_cost():
             return jsonify({"success": False, "message": "Pages missing"}), 400
 
         #ppp
-        cost_per_page = 1.5 if print_type == "double" else 1
+        cost_per_page = 1.4 if print_type == "double" else 0.8
 
-        total_cost = round(pages * cost_per_page, 2)
+        if print_type == "double":
+            
+            if pages % 2 == 0:
+                total_cost = round((pages // 2) * cost_per_page, 2)
+            else:
+                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
+        else:
+            
+            total_cost = round(pages * cost_per_page, 2)
 
         return jsonify({
             "success": True,
@@ -491,9 +499,15 @@ def upload_file():
 
         # 4️⃣ Calculate cost (your exact logic)
         #ppp
-        cost_per_page = 1.5 if print_type == "double" else 1
+        cost_per_page = 1.4 if print_type == "double" else 0.8
 
-        total_cost = round(pages * cost_per_page, 2)
+        if print_type == "double":
+            if pages % 2 == 0:
+                total_cost = round((pages // 2) * cost_per_page, 2)
+            else:
+                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
+        else:
+            total_cost = round(pages * cost_per_page, 2)
 
         # 5️⃣ Save job in MongoDB
         job_id = str(random.randint(100000, 999999))
