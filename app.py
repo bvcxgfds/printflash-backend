@@ -28,6 +28,9 @@ from datetime import datetime,timezone,timedelta
 import zoneinfo
 from flask import Flask
 # from waitress import serve
+import pikepdf
+
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -137,6 +140,8 @@ def create_print_job():
         #ppp
         cost_per_page = 1.4 if print_type == "double" else 0.8
         total_cost = round(pages * cost_per_page, 2) # ✅ FIXED PRINT ID
+        if pages == 1:
+            total_cost = 1.3
         def generate_print_id():
             while True:
                 new_id = str(random.randint(100000, 999999))
@@ -335,8 +340,8 @@ def calculate():
         if not file:
             return jsonify({"success": False, "message": "No file"}), 400
 
-        reader = PdfReader(file)
-        num_pages = len(reader.pages)
+        pdf = pikepdf.open(file)
+        num_pages = len(pdf.pages)
 
         if num_pages > MAX_PAGES:
             return jsonify({
@@ -377,6 +382,8 @@ def get_cost():
 
         total_cost = round(pages * cost_per_page, 2)
 
+if pages == 1:
+    total_cost = 1.3
         return jsonify({
             "success": True,
             "cost_per_page": cost_per_page,
@@ -493,6 +500,8 @@ def upload_file():
         cost_per_page = 1.4 if print_type == "double" else 0.8
 
         total_cost = round(pages * cost_per_page, 2)
+        if pages == 1:
+    total_cost = 1.3
 
         # 5️⃣ Save job in MongoDB
         job_id = str(random.randint(100000, 999999))
