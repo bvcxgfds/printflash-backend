@@ -382,8 +382,8 @@ def get_cost():
 
         total_cost = round(pages * cost_per_page, 2)
 
-if pages == 1:
-    total_cost = 1.3
+        if pages == 1:
+            total_cost = 1.3
         return jsonify({
             "success": True,
             "cost_per_page": cost_per_page,
@@ -501,7 +501,7 @@ def upload_file():
 
         total_cost = round(pages * cost_per_page, 2)
         if pages == 1:
-    total_cost = 1.3
+            total_cost = 1.3
 
         # 5️⃣ Save job in MongoDB
         job_id = str(random.randint(100000, 999999))
