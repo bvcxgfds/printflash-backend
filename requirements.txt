@@ -10,5 +10,4 @@ python-dotenv
 google-auth
 gunicorn
 pycryptodome
-pikepdf
-fitz
+pymupdf
