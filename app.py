@@ -136,8 +136,7 @@ def create_print_job():
         # Cost
         #ppp
         cost_per_page = 1.4 if print_type == "double" else 0.8
-        total_cost = round(((pages + 1)//2)*cost_per_page if print_type=="double" else pages*cost_per_page, 2)
-        # ✅ FIXED PRINT ID
+        total_cost = round(pages * cost_per_page, 2) # ✅ FIXED PRINT ID
         def generate_print_id():
             while True:
                 new_id = str(random.randint(100000, 999999))
@@ -376,15 +375,7 @@ def get_cost():
         #ppp
         cost_per_page = 1.4 if print_type == "double" else 0.8
 
-        if print_type == "double":
-            
-            if pages % 2 == 0:
-                total_cost = round((pages // 2) * cost_per_page, 2)
-            else:
-                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
-        else:
-            
-            total_cost = round(pages * cost_per_page, 2)
+        total_cost = round(pages * cost_per_page, 2)
 
         return jsonify({
             "success": True,
@@ -501,13 +492,7 @@ def upload_file():
         #ppp
         cost_per_page = 1.4 if print_type == "double" else 0.8
 
-        if print_type == "double":
-            if pages % 2 == 0:
-                total_cost = round((pages // 2) * cost_per_page, 2)
-            else:
-                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
-        else:
-            total_cost = round(pages * cost_per_page, 2)
+        total_cost = round(pages * cost_per_page, 2)
 
         # 5️⃣ Save job in MongoDB
         job_id = str(random.randint(100000, 999999))
