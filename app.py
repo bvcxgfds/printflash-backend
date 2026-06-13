@@ -141,7 +141,7 @@ def create_print_job():
         cost_per_page = 1.4 if print_type == "double" else 0.8
         total_cost = round(pages * cost_per_page, 2) # ✅ FIXED PRINT ID
         if pages == 1:
-            total_cost = 1.3
+            total_cost = 1
         def generate_print_id():
             while True:
                 new_id = str(random.randint(100000, 999999))
@@ -383,7 +383,7 @@ def get_cost():
         total_cost = round(pages * cost_per_page, 2)
 
         if pages == 1:
-            total_cost = 1.3
+            total_cost = 1
         return jsonify({
             "success": True,
             "cost_per_page": cost_per_page,
@@ -501,7 +501,7 @@ def upload_file():
 
         total_cost = round(pages * cost_per_page, 2)
         if pages == 1:
-            total_cost = 1.3
+            total_cost = 1
 
         # 5️⃣ Save job in MongoDB
         job_id = str(random.randint(100000, 999999))
