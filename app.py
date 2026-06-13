@@ -29,6 +29,7 @@ import zoneinfo
 from flask import Flask
 # from waitress import serve
 import pikepdf
+import fitz  # PyMuPDF
 
 
 from dotenv import load_dotenv
@@ -340,8 +341,9 @@ def calculate():
         if not file:
             return jsonify({"success": False, "message": "No file"}), 400
 
-        pdf = pikepdf.open(file)
-        num_pages = len(pdf.pages)
+        doc = fitz.open(stream=file.read(), filetype="pdf")
+        num_pages = len(doc)
+        doc.close()
 
         if num_pages > MAX_PAGES:
             return jsonify({
