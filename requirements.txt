@@ -11,3 +11,4 @@ google-auth
 gunicorn
 pycryptodome
 pikepdf
+fitz
