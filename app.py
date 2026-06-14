@@ -140,7 +140,16 @@ def create_print_job():
         # Cost
         #ppp
         cost_per_page = 1.4 if print_type == "double" else 0.8
-        total_cost = round(pages * cost_per_page, 2) # ✅ FIXED PRINT ID
+        # total_cost = round(pages * cost_per_page, 2) # ✅ FIXED PRINT ID
+        if print_type == "double":
+            
+            if pages % 2 == 0:
+                total_cost = round((pages // 2) * cost_per_page, 2)
+            else:
+                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
+        else:
+            
+            total_cost = round(pages * cost_per_page, 2)
         if pages == 1:
             total_cost = 1
         def generate_print_id():
@@ -382,7 +391,16 @@ def get_cost():
         #ppp
         cost_per_page = 1.4 if print_type == "double" else 0.8
 
-        total_cost = round(pages * cost_per_page, 2)
+        # total_cost = round(pages * cost_per_page, 2)
+        if print_type == "double":
+            
+            if pages % 2 == 0:
+                total_cost = round((pages // 2) * cost_per_page, 2)
+            else:
+                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
+        else:
+            
+            total_cost = round(pages * cost_per_page, 2)
 
         if pages == 1:
             total_cost = 1
@@ -501,7 +519,16 @@ def upload_file():
         #ppp
         cost_per_page = 1.4 if print_type == "double" else 0.8
 
-        total_cost = round(pages * cost_per_page, 2)
+        # total_cost = round(pages * cost_per_page, 2)
+        if print_type == "double":
+            
+            if pages % 2 == 0:
+                total_cost = round((pages // 2) * cost_per_page, 2)
+            else:
+                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
+        else:
+            
+            total_cost = round(pages * cost_per_page, 2)
         if pages == 1:
             total_cost = 1
 
