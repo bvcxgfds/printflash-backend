@@ -31,6 +31,8 @@ from flask import Flask
 
 import fitz  # PyMuPDF
 
+import time
+import threading
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -101,7 +103,32 @@ mongo_client = MongoClient(os.getenv("MONGO_URI"))
 db = mongo_client["printezy"]
 jobs_collection = db["jobs"]
 
+temp_uploads_collection = db["temp_uploads"]
+
 # print(db.list_collection_names())
+
+
+
+def cleanup_expired_uploads():
+    while True:
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=60)
+            expired = list(temp_uploads_collection.find({"uploaded_at": {"$lt": cutoff}}))
+            for doc in expired:
+                try:
+                    cloudinary.uploader.destroy(doc["public_id"], resource_type="raw")
+                    print(f"Auto-deleted: {doc['public_id']}")
+                except Exception as e:
+                    print(f"Cloudinary delete error: {e}")
+                temp_uploads_collection.delete_one({"_id": doc["_id"]})
+        except Exception as e:
+            print("CLEANUP ERROR:", e)
+        time.sleep(300)  # runs every 5 min
+
+threading.Thread(target=cleanup_expired_uploads, daemon=True).start()
+
+
+
 
 # for api check
 @app.route("/health", methods=["GET"])
@@ -118,40 +145,51 @@ def health():
 @app.route("/print", methods=["POST"])
 def create_print_job():
     try:
-        file = request.files.get("file")
+        temp_id = request.form.get("temp_id")
         otp = request.form.get("otp")
         email = request.form.get("email")
         print_type = request.form.get("printType")
-        pages = int(request.form.get("pages", 0))
+        # pages = temp_doc["pages"]
 
-        if not file or not otp or not email:
+        if not temp_id or not otp or not email:
             return jsonify({"success": False, "message": "Missing data"}), 400
 
         email = email.lower()
 
-        # Upload
-        result = cloudinary.uploader.upload(
-            file,
-            resource_type="raw",
-            folder="printflash"
-        )
-        file_url = result["secure_url"]
+        # Fetch the temp upload (already on Cloudinary)
+        temp_doc = temp_uploads_collection.find_one({
+            "_id": temp_id,
+            "user_email": email
+        })
+        if not temp_doc:
+            return jsonify({"success": False, "message": "Upload expired. Please re-upload."}), 404
+        
+        if not temp_doc.get("payment_verified", False):
+            return jsonify({
+                "success": False,
+                "message": "Payment required"
+            }), 402
+            
+        if print_type != temp_doc.get("paid_print_type"):
+            return jsonify({
+                "success": False,
+                "message": "Print type mismatch"
+        }), 400
 
-        # Cost
-        #ppp
+        pages = temp_doc["pages"]
+
+        file_url = temp_doc["file_url"]
+        fileName = temp_doc["fileName"]
+
+        # Cost (same logic as before)
         cost_per_page = 1.4 if print_type == "double" else 0.8
-        # total_cost = round(pages * cost_per_page, 2) # ✅ FIXED PRINT ID
         if print_type == "double":
-            
-            if pages % 2 == 0:
-                total_cost = round((pages // 2) * cost_per_page, 2)
-            else:
-                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
+            total_cost = round(((pages // 2) + (1 if pages % 2 else 0)) * cost_per_page, 2)
         else:
-            
             total_cost = round(pages * cost_per_page, 2)
         if pages == 1:
             total_cost = 1
+
         def generate_print_id():
             while True:
                 new_id = str(random.randint(100000, 999999))
@@ -163,18 +201,20 @@ def create_print_job():
         job = {
             "_id": print_id,
             "user_email": email,
-            "fileName": file.filename,
+            "fileName": fileName,
             "pages": pages,
             "print_type": print_type,
             "cost": total_cost,
             "file_url": file_url,
             "otp": str(otp),
             "status": "pending",
-            # "created_at": datetime.now().strftime("%d %b %Y, %I:%M %p")
-           "created_at": datetime.now(timezone.utc)
+            "created_at": datetime.now(timezone.utc)
         }
 
         jobs_collection.insert_one(job)
+
+        # Remove temp record — payment confirmed
+        temp_uploads_collection.delete_one({"_id": temp_id})
 
         return jsonify({
             "success": True,
@@ -188,14 +228,27 @@ def create_print_job():
         print("UPLOAD ERROR:", e)
         return jsonify({"success": False}), 500
 
-
-
 # -------------------------
 # HISTORY (ALL USERS)
 # -------------------------
 @app.route("/history/<email>", methods=["GET"])
 def history(email):
     try:
+        token = request.headers.get("Authorization")
+        
+        if not token:
+            return jsonify([]), 401
+        
+        idinfo = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+        
+        if idinfo["email"].lower() != email.lower():
+            return jsonify([]), 403
+
+        
         email = email.lower()
 
         jobs = list(
@@ -346,11 +399,15 @@ def google_login():
 def calculate():
     try:
         file = request.files.get("file")
+        user_email = request.form.get("email", "").lower()
 
         if not file:
             return jsonify({"success": False, "message": "No file"}), 400
 
-        doc = fitz.open(stream=file.read(), filetype="pdf")
+        # Read once, reuse for both PyMuPDF and Cloudinary
+        file_bytes = file.read()
+
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
         num_pages = len(doc)
         doc.close()
 
@@ -360,19 +417,37 @@ def calculate():
                 "message": f"Max {MAX_PAGES} pages allowed. Your file has {num_pages} pages."
             }), 400
 
-        total_cost = round(num_pages * COST_PER_PAGE, 2)
+        # Upload to Cloudinary once here
+        result = cloudinary.uploader.upload(
+            BytesIO(file_bytes),
+            resource_type="raw",
+            folder="printflash"
+        )
+        file_url = result["secure_url"]
+        public_id = result["public_id"]
+
+        # Save temp record (user_email, fileName, file_url only for now)
+        temp_id = str(uuid.uuid4())
+        temp_uploads_collection.insert_one({
+            "_id": temp_id,
+            "file_url": file_url,
+            "public_id": public_id,
+            "fileName": file.filename,
+            "user_email": user_email,
+            "pages": num_pages,
+            "payment_verified": False,
+            "uploaded_at": datetime.now(timezone.utc)
+        })
 
         return jsonify({
             "success": True,
             "pages": num_pages,
-            "cost_per_page": COST_PER_PAGE,
-            "total_cost": total_cost
+            "temp_id": temp_id
         })
 
     except Exception as e:
         print("CALC ERROR:", e)
         return jsonify({"success": False}), 500
-
 
 # -------------------------
 # REAL-TIME COST API
@@ -463,7 +538,10 @@ def verify_payment():
         print("VERIFY PAYMENT DATA:", data)  # debug log
 
         if not data:
-            return jsonify({"status": "success"})
+            return jsonify({
+                "status": "failed",
+                "message": "Missing data"            
+                }),400
 
         order_id = data.get("razorpay_order_id")
         payment_id = data.get("razorpay_payment_id")
@@ -479,84 +557,106 @@ def verify_payment():
             ).hexdigest()
 
             if generated_signature == signature:
+                temp_id = data.get("temp_id")
+                print_type = data.get("printType")
+                
+                temp_uploads_collection.update_one(
+                    {"_id": temp_id},
+                    {
+                        "$set": {
+                            "payment_verified": True,
+                            "paid_print_type": print_type,
+                            "payment_id": payment_id,
+                             "payment_time": datetime.now(timezone.utc)
+                        }
+                        
+                    }
+                )
                 return jsonify({"status": "success"})
             else:
                 return jsonify({"status": "failed", "message": "Signature mismatch"})
 
         # ✅ If fields missing — trust Razorpay's callback
         # Razorpay handler only fires on real successful payments
-        return jsonify({"status": "success"})
+        return jsonify({
+             "status": "failed",
+              "message": "Missing payment fields"
+            
+            }),400
 
     except Exception as e:
         print("VERIFY PAYMENT ERROR:", e)
-        return jsonify({"status": "success"})
+        return jsonify({
+            "status": "failed",
+             "message": "Verification failed"
+             }),500
 
 
  # Upload to Cloudinary
 
-@app.route("/upload", methods=["POST"])
-def upload_file():
-    try:
-        # 1️⃣ Get file and form data
-        file = request.files["file"]
-        pages = int(request.form.get("pages", 0))
-        print_type = request.form.get("printType")
-        user_email = request.form.get("email")
+# @app.route("/upload", methods=["POST"])
+# def upload_file():
+#     try:
+#         # 1️⃣ Get file and form data
+#         file = request.files["file"]
+#         pages = int(request.form.get("pages", 0))
+#         print_type = request.form.get("printType")
+#         user_email = request.form.get("email")
 
-        # 2️⃣ Check pages
-        if pages == 0:
-            return jsonify({"success": False, "message": "Pages missing"}), 400
+#         # 2️⃣ Check pages
+#         if pages == 0:
+#             return jsonify({"success": False, "message": "Pages missing"}), 400
 
-        # 3️⃣ Upload to Cloudinary
-        result = cloudinary.uploader.upload(
-            file,
-            resource_type="raw",  # must for PDFs
-            folder="printflash"
-        )
-        file_url = result["secure_url"]
+#         # 3️⃣ Upload to Cloudinary
+#         result = cloudinary.uploader.upload(
+#             file,
+#             resource_type="raw",  # must for PDFs
+#             folder="printflash"
+#         )
+#         file_url = result["secure_url"]
 
-        # 4️⃣ Calculate cost (your exact logic)
-        #ppp
-        cost_per_page = 1.4 if print_type == "double" else 0.8
+#         # 4️⃣ Calculate cost (your exact logic)
+#         #ppp
+#         cost_per_page = 1.4 if print_type == "double" else 0.8
 
-        # total_cost = round(pages * cost_per_page, 2)
-        if print_type == "double":
+#         # total_cost = round(pages * cost_per_page, 2)
+#         if print_type == "double":
             
-            if pages % 2 == 0:
-                total_cost = round((pages // 2) * cost_per_page, 2)
-            else:
-                total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
-        else:
+#             if pages % 2 == 0:
+#                 total_cost = round((pages // 2) * cost_per_page, 2)
+#             else:
+#                 total_cost = round(((pages // 2) + 1) * cost_per_page, 2)
+#         else:
             
-            total_cost = round(pages * cost_per_page, 2)
-        if pages == 1:
-            total_cost = 1
+#             total_cost = round(pages * cost_per_page, 2)
+#         if pages == 1:
+#             total_cost = 1
 
-        # 5️⃣ Save job in MongoDB
-        job_id = str(random.randint(100000, 999999))
-        job = {
-            "_id": job_id,
-            "user_email": user_email,
-             "fileName": file.filename,
-            "pages": pages,
-            "print_type": print_type,
-            "cost": total_cost,
-            "file_url": file_url,
-            "status": "pending"
-        }
-        jobs_collection.insert_one(job)
+#         # 5️⃣ Save job in MongoDB
+#         job_id = str(random.randint(100000, 999999))
+#         job = {
+#             "_id": job_id,
+#             "user_email": user_email,
+#              "fileName": file.filename,
+#             "pages": pages,
+#             "print_type": print_type,
+#             "cost": total_cost,
+#             "file_url": file_url,
+#             "status": "pending"
+#         }
+#         jobs_collection.insert_one(job)
 
-        # 6️⃣ Return response
-        return jsonify({
-            "success": True,
-            "job_id": job_id,
-            "file_url": file_url,
-            "cost": total_cost
-        })
+#         # 6️⃣ Return response
+#         return jsonify({
+#             "success": True,
+#             "job_id": job_id,
+#             "file_url": file_url,
+#             "cost": total_cost
+#         })
 
-    except Exception as e:
-        print("UPLOAD ERROR:", e)
-        return jsonify({"success": False}), 500
+#     except Exception as e:
+#         print("UPLOAD ERROR:", e)
+#         return jsonify({"success": False}), 500
 
 
 
