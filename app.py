@@ -272,7 +272,7 @@ def history(email):
             return jsonify([]), 403
 
         jobs = list(
-            jobs_collection.find({"user_email": email.lower()}).sort("_id", -1)
+            jobs_collection.find({"user_email": email.lower()}).sort("created_at", -1)
         )
 
         result = []
