@@ -237,24 +237,23 @@ def create_print_job():
 @app.route("/history/<email>", methods=["GET"])
 def history(email):
     try:
-        session_token = request.headers.get("Authorization")
-        
-        if not session_token:
-            return jsonify([]), 401
-        
-        # print("EMAIL:", email)
-        # print("SESSION TOKEN:", session_token)
-        
-        user = users_collection.find_one({
-            "email": email.lower(),
-            "session_token": session_token
-        })
-        
-        if not user:
-            return jsonify([]), 403
+        token = request.headers.get("Authorization")
 
-        
+        if not token:
+            return jsonify([]), 401
+
+        idinfo = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+
+        token_email = idinfo.get("email", "").lower()
         email = email.lower()
+
+        # 🔐 IMPORTANT SECURITY CHECK
+        if token_email != email:
+            return jsonify([]), 403
 
         jobs = list(
             jobs_collection.find({"user_email": email}).sort("_id", -1)
@@ -276,8 +275,7 @@ def history(email):
 
     except Exception as e:
         print("HISTORY ERROR:", e)
-        return jsonify([])
-        
+        return jsonify([]), 401        
         
 # -------------------------
 # VERIFY AT PRINTER
@@ -373,19 +371,6 @@ def google_login():
             GOOGLE_CLIENT_ID
         )
 
-        session_token = secrets.token_urlsafe(32)
-
-        users_collection.update_one(
-            {"email": idinfo["email"].lower()},
-            {
-                "$set": {
-                    "session_token": session_token,
-                    "last_login": datetime.now(timezone.utc)
-                }
-            },
-            upsert=True
-        )
-
         return jsonify({
             "success": True,
             "user": {
@@ -393,14 +378,13 @@ def google_login():
                 "name": idinfo.get("name"),
                 "email": idinfo["email"],
                 "profilePic": idinfo.get("picture"),
-                "sessionToken": session_token
+                "googleToken": token   # 👈 ADD THIS
             }
         })
 
     except Exception as e:
         print("GOOGLE LOGIN ERROR:", e)
-        return jsonify({"success": False}), 401
-    
+        return jsonify({"success": False}), 401    
 
 # -------------------------
 # USER-SPECIFIC HISTORY
