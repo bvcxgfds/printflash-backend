@@ -52,7 +52,18 @@ load_dotenv()
 
 
 app = Flask(__name__)
-CORS(app)
+
+# Replace CORS(app) with:
+CORS(app,
+    origins=[
+        "http://localhost:5173",        # Vite dev (use 3000 if CRA)
+        "http://localhost:3000",
+        "https://theprintezy.com",      # your actual prod frontend
+        "https://www.theprintezy.com"   # with www too, just in case
+    ],
+    supports_credentials=True
+)
+
 # Razorpay
 razorpay_client = razorpay.Client(auth=(
     os.getenv("RAZORPAY_KEY_ID"),
@@ -412,7 +423,7 @@ def google_login():
             "exp": datetime.utcnow() + timedelta(days=30)
         }, SECRET_KEY, algorithm="HS256")
 
-        return jsonify({
+        response = jsonify({
             "success": True,
             "user": {
                 "email": email,
