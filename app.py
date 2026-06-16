@@ -399,7 +399,8 @@ def google_login():
         idinfo = id_token.verify_oauth2_token(
             token,
             google_requests.Request(),
-            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_ID,
+            clock_skew_in_seconds=100
         )
 
         email = idinfo["email"].lower()
@@ -437,8 +438,15 @@ def google_login():
             "refreshToken",
             refresh_token,
             httponly=True,
+            
+            # for localhost 
+            
+            # secure=False,
             secure=True,
-            samesite="None"   # required for cross-site frontend/backend
+            # samesite="Lax",
+            samesite="None",
+            # required for cross-site frontend/backend
+            max_age=60 * 60 * 24 * 30
         )
 
         return response
@@ -1008,9 +1016,13 @@ def partner_stats():
     
 @app.route("/refresh", methods=["POST"])
 def refresh():
+    
+    print("COOKIES:", request.cookies)
+    
     token = request.cookies.get("refreshToken")
 
     if not token:
+        print("NO REFRESH TOKEN")
         return jsonify({"success": False}), 401
 
     try:
@@ -1029,20 +1041,24 @@ def refresh():
 
     except jwt.ExpiredSignatureError:
         return jsonify({"success": False, "message": "refresh expired"}), 401
+    except Exception as e:
+        print("REFRESH ERROR:", e)
+        return jsonify({"success": False, "message": "Invalid token"}), 401    
+    
+    
+    
+    
+    
+    
+    
+    
+@app.route("/check-cookie")
+def check_cookie():
+    print("COOKIES:", request.cookies)
 
-    except:
-        print("REFRESH ERROR:", e)   # ← log the actual error
-        return jsonify({"success": False, "message": "Invalid token"}), 401
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    return jsonify({
+        "cookies": dict(request.cookies)
+    })
     
     
     
