@@ -1025,15 +1025,14 @@ def refresh():
             "exp": datetime.utcnow() + timedelta(minutes=30)
         }, SECRET_KEY, algorithm="HS256")
 
-        return jsonify({
-            "accessToken": new_access
-        })
+        return jsonify({"success": True, "accessToken": new_access})
 
     except jwt.ExpiredSignatureError:
         return jsonify({"success": False, "message": "refresh expired"}), 401
 
     except:
-        return jsonify({"success": False}), 401
+        print("REFRESH ERROR:", e)   # ← log the actual error
+        return jsonify({"success": False, "message": "Invalid token"}), 401
     
     
     
