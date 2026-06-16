@@ -139,10 +139,14 @@ threading.Thread(target=cleanup_expired_uploads, daemon=True).start()
 def verify_jwt(token):
     try:
         decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        
+        if decoded.get("type") != "access":
+            return None
+
         return decoded
+
     except:
-        return None
-    
+        return None    
     
     
     
@@ -396,7 +400,17 @@ def google_login():
             "exp": datetime.utcnow() + timedelta(days=120)
         }
 
-        app_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+        access_token = jwt.encode({
+            "email": email,
+            "type": "access",
+            "exp": datetime.utcnow() + timedelta(minutes=30)
+        }, SECRET_KEY, algorithm="HS256")
+        
+        refresh_token = jwt.encode({
+            "email": email,
+            "type": "refresh",
+            "exp": datetime.utcnow() + timedelta(days=30)
+        }, SECRET_KEY, algorithm="HS256")
 
         return jsonify({
             "success": True,
@@ -404,9 +418,20 @@ def google_login():
                 "email": email,
                 "name": idinfo.get("name"),
                 "profilePic": idinfo.get("picture"),
-                "token": app_token   # 👈 YOUR JWT
+                "accessToken": access_token
             }
         })
+        
+        response.set_cookie(
+            "refreshToken",
+            refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="None"   # required for cross-site frontend/backend
+        )
+
+        return response
+        
 
     except Exception as e:
         print("LOGIN ERROR:", e)
@@ -970,7 +995,34 @@ def partner_stats():
     
     
     
-    
+@app.route("/refresh", methods=["POST"])
+def refresh():
+    token = request.cookies.get("refreshToken")
+
+    if not token:
+        return jsonify({"success": False}), 401
+
+    try:
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+
+        if decoded.get("type") != "refresh":
+            return jsonify({"success": False}), 401
+
+        new_access = jwt.encode({
+            "email": decoded["email"],
+            "type": "access",
+            "exp": datetime.utcnow() + timedelta(minutes=30)
+        }, SECRET_KEY, algorithm="HS256")
+
+        return jsonify({
+            "accessToken": new_access
+        })
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"success": False, "message": "refresh expired"}), 401
+
+    except:
+        return jsonify({"success": False}), 401
     
     
     
