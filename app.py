@@ -17,6 +17,8 @@ from pymongo import MongoClient
 import uuid
 import math
 import random
+import jwt
+
 import secrets
 from flask import send_file
 from io import BytesIO
@@ -108,6 +110,8 @@ temp_uploads_collection = db["temp_uploads"]
 
 users_collection = db["users"]
 
+SECRET_KEY = os.getenv("JWT_SECRET", "supersecret_key_change_this")
+
 # print(db.list_collection_names())
 
 
@@ -132,6 +136,18 @@ threading.Thread(target=cleanup_expired_uploads, daemon=True).start()
 
 
 
+def verify_jwt(token):
+    try:
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return decoded
+    except:
+        return None
+    
+    
+    
+    
+    
+    
 
 # for api check
 @app.route("/health", methods=["GET"])
@@ -242,29 +258,24 @@ def history(email):
         if not token:
             return jsonify([]), 401
 
-        idinfo = id_token.verify_oauth2_token(
-            token,
-            google_requests.Request(),
-            GOOGLE_CLIENT_ID
-        )
+        user = verify_jwt(token)
 
-        token_email = idinfo.get("email", "").lower()
-        email = email.lower()
+        if not user:
+            return jsonify([]), 401
 
-        # 🔐 IMPORTANT SECURITY CHECK
-        if token_email != email:
+        # SECURITY CHECK
+        if user["email"] != email.lower():
             return jsonify([]), 403
 
         jobs = list(
-            jobs_collection.find({"user_email": email}).sort("_id", -1)
+            jobs_collection.find({"user_email": email.lower()}).sort("_id", -1)
         )
 
         result = []
-
         for job in jobs:
             result.append({
-                "printId": str(job.get("_id")),
-                "fileName": job.get("fileName", "Document.pdf"),
+                "printId": str(job["_id"]),
+                "fileName": job.get("fileName"),
                 "otp": job.get("otp"),
                 "verified": job.get("status") == "printed",
                 "created_at": job.get("created_at"),
@@ -275,8 +286,12 @@ def history(email):
 
     except Exception as e:
         print("HISTORY ERROR:", e)
-        return jsonify([]), 401        
-        
+        return jsonify([]), 500
+    
+    
+    
+    
+            
 # -------------------------
 # VERIFY AT PRINTER
 # -------------------------
@@ -365,27 +380,37 @@ def google_login():
     token = data.get("token")
 
     try:
+        # 1. Verify Google token
         idinfo = id_token.verify_oauth2_token(
             token,
             google_requests.Request(),
             GOOGLE_CLIENT_ID
         )
 
+        email = idinfo["email"].lower()
+
+        # 2. Create YOUR JWT (7 days expiry)
+        payload = {
+            "email": email,
+            "name": idinfo.get("name"),
+            "exp": datetime.utcnow() + timedelta(days=120)
+        }
+
+        app_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
         return jsonify({
             "success": True,
             "user": {
-                "id": idinfo["sub"],
+                "email": email,
                 "name": idinfo.get("name"),
-                "email": idinfo["email"],
                 "profilePic": idinfo.get("picture"),
-                "googleToken": token   # 👈 ADD THIS
+                "token": app_token   # 👈 YOUR JWT
             }
         })
 
     except Exception as e:
-        print("GOOGLE LOGIN ERROR:", e)
-        return jsonify({"success": False}), 401    
-
+        print("LOGIN ERROR:", e)
+        return jsonify({"success": False}), 401
 # -------------------------
 # USER-SPECIFIC HISTORY
 # -------------------------
