@@ -17,6 +17,7 @@ from pymongo import MongoClient
 import uuid
 import math
 import random
+import secrets
 from flask import send_file
 from io import BytesIO
 import requests
@@ -104,6 +105,8 @@ db = mongo_client["printezy"]
 jobs_collection = db["jobs"]
 
 temp_uploads_collection = db["temp_uploads"]
+
+users_collection = db["users"]
 
 # print(db.list_collection_names())
 
@@ -234,18 +237,20 @@ def create_print_job():
 @app.route("/history/<email>", methods=["GET"])
 def history(email):
     try:
-        token = request.headers.get("Authorization")
+        session_token = request.headers.get("Authorization")
         
-        if not token:
+        if not session_token:
             return jsonify([]), 401
         
-        idinfo = id_token.verify_oauth2_token(
-            token,
-            google_requests.Request(),
-            GOOGLE_CLIENT_ID
-        )
+        # print("EMAIL:", email)
+        # print("SESSION TOKEN:", session_token)
         
-        if idinfo["email"].lower() != email.lower():
+        user = users_collection.find_one({
+            "email": email.lower(),
+            "session_token": session_token
+        })
+        
+        if not user:
             return jsonify([]), 403
 
         
@@ -368,20 +373,34 @@ def google_login():
             GOOGLE_CLIENT_ID
         )
 
+        session_token = secrets.token_urlsafe(32)
+
+        users_collection.update_one(
+            {"email": idinfo["email"].lower()},
+            {
+                "$set": {
+                    "session_token": session_token,
+                    "last_login": datetime.now(timezone.utc)
+                }
+            },
+            upsert=True
+        )
+
         return jsonify({
             "success": True,
             "user": {
-                "id": idinfo['sub'],
-                "name": idinfo.get('name'),
-                "email": idinfo['email'],
-                "profilePic": idinfo.get("picture")
+                "id": idinfo["sub"],
+                "name": idinfo.get("name"),
+                "email": idinfo["email"],
+                "profilePic": idinfo.get("picture"),
+                "sessionToken": session_token
             }
         })
 
     except Exception as e:
         print("GOOGLE LOGIN ERROR:", e)
         return jsonify({"success": False}), 401
-
+    
 
 # -------------------------
 # USER-SPECIFIC HISTORY
