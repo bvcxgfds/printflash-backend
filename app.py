@@ -54,7 +54,17 @@ load_dotenv()
 app = Flask(__name__)
 
 # Replace CORS(app) with:
+# CORS(app,
+#     origins=[
+#         "http://localhost:5173",        # Vite dev (use 3000 if CRA)
+#         "http://localhost:3000",
+#         "https://theprintezy.com",      # your actual prod frontend
+#         "https://www.theprintezy.com"   # with www too, just in case
+#     ],
+#     supports_credentials=True
+# )
 CORS(app, supports_credentials=True)
+
 # Razorpay
 razorpay_client = razorpay.Client(auth=(
     os.getenv("RAZORPAY_KEY_ID"),
@@ -1050,6 +1060,51 @@ def check_cookie():
     return jsonify({
         "cookies": dict(request.cookies)
     })
+    
+    
+    
+    
+    # only 2/per job 
+     
+@app.route("/check-print-limit/<email>", methods=["GET"])
+def check_print_limit(email):
+    try:
+        email = email.lower()
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+        jobs = list(
+            jobs_collection.find({
+                "user_email": email,
+                "created_at": {"$gte": cutoff}
+            }).sort("created_at", 1)
+        )
+
+        if len(jobs) < 2:
+            return jsonify({
+                "allowed": True,
+                "remaining_seconds": 0
+            })
+
+        oldest_job = jobs[0]
+
+        retry_time = oldest_job["created_at"] + timedelta(hours=24)
+
+        remaining_seconds = int(
+            (retry_time - datetime.now(timezone.utc)).total_seconds()
+        )
+
+        return jsonify({
+            "allowed": False,
+            "remaining_seconds": max(0, remaining_seconds)
+        })
+
+    except Exception as e:
+        print("LIMIT CHECK ERROR:", e)
+        return jsonify({
+            "allowed": False,
+            "remaining_seconds": 0
+        }), 500
     
     
     
